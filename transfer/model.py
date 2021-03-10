@@ -1,5 +1,7 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.autograd import Variable
 
 
 class CNN(nn.Module):
@@ -32,3 +34,13 @@ class CNN(nn.Module):
         x = F.relu(self.fc4(x))
         x = self.fc5(x)
         return F.log_softmax(x, dim=1)
+
+    def evaluate(self, valloader, batch_size):
+        correct = 0
+        for val_imgs, val_labels in valloader:
+            val_imgs = Variable(val_imgs).float()
+            outputs = self.forward(val_imgs)
+            predicted = torch.max(outputs, 1)[1]
+            correct += (predicted == val_labels).sum()
+        correct_percent = 100*correct/(len(valloader)*batch_size)
+        return correct_percent

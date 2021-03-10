@@ -24,7 +24,7 @@ for epoch in range(epochs):  # loop over the dataset multiple times
 
     correct = 0
 
-    for i, data in enumerate(mnist_train, 0):
+    for i, data in enumerate(svhn_train, 0):
         # get the inputs; data is a list of [inputs, labels]
         inputs, labels = data
 
@@ -44,7 +44,7 @@ for epoch in range(epochs):  # loop over the dataset multiple times
 
         if i % 50 == 0:
             message = "Epochs : {}/{}, ({:.0f}%), Loss:{:.6f}, Accuracy:{:.3f}".format(
-                epoch+1, epochs, 100*i/len(mnist_train), loss, correct_percent)
+                epoch+1, epochs, 100*i/len(svhn_train), loss, correct_percent)
             print(message)
 
 print('Finished Training')
