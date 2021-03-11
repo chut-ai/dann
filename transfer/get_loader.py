@@ -20,7 +20,7 @@ def get_mnist(batch_size):
 
     return trainloader, valloader
 
-def get_svhn(batch_size):
+def get_svhn(batch_size, batch_nb=938):
     transform = transforms.Compose([transforms.Grayscale(num_output_channels=1),
                                     transforms.ToTensor(),
                                     transforms.Normalize(0.5, 0.5),
@@ -29,8 +29,8 @@ def get_svhn(batch_size):
 
     dataset = datasets.SVHN("~/data/", download=False, transform=transform)
 
-    val_size = 12000
-    train_size = len(dataset) - val_size
+    train_size = batch_size*batch_nb
+    val_size = len(dataset) - train_size
 
     trainset, valset = random_split(dataset, [train_size, val_size])
 
