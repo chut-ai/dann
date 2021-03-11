@@ -1,6 +1,6 @@
 import torch.nn as nn
-
 from dann.transfer import get_loader
+from dann.basic_dann.function import ReverseLayerF
 
 class Encoder(nn.Module):
 
@@ -53,6 +53,7 @@ class Discriminator(nn.Module):
         self.net.add_module("fc2", nn.Linear(100, 2))
         self.net.add_module("softmax", nn.Softmax(dim=1))
 
-    def forward(self, x):
+    def forward(self, x, alpha):
+        x = ReverseLayerF.apply(x, alpha)
         x = self.net(x)
         return x
