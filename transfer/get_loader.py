@@ -14,9 +14,9 @@ def get_mnist(batch_size):
                             train=False, transform=transform)
 
     trainloader = torch.utils.data.DataLoader(
-        trainset, batch_size=batch_size, shuffle=True)
+        trainset, batch_size=batch_size, shuffle=True, drop_last=True)
     valloader = torch.utils.data.DataLoader(
-        valset, batch_size=batch_size, shuffle=True)
+        valset, batch_size=batch_size, shuffle=True, drop_last=True)
 
     return trainloader, valloader
 
