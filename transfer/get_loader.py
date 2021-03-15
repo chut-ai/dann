@@ -3,7 +3,7 @@ from torch.utils.data import random_split
 from torchvision import datasets, transforms
 
 
-def get_mnist(batch_size):
+def get_mnist(batch_size, num_workers=8):
     transform = transforms.Compose([transforms.ToTensor(),
                                     transforms.Normalize((0.5,), (0.5,)),
                                     ])
@@ -14,13 +14,13 @@ def get_mnist(batch_size):
                             train=False, transform=transform)
 
     trainloader = torch.utils.data.DataLoader(
-        trainset, batch_size=batch_size, shuffle=True, drop_last=True)
+        trainset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers = num_workers)
     valloader = torch.utils.data.DataLoader(
-        valset, batch_size=batch_size, shuffle=True, drop_last=True)
+        valset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers = num_workers)
 
     return trainloader, valloader
 
-def get_svhn(batch_size, batch_nb=938):
+def get_svhn(batch_size, batch_nb=937, num_workers=8):
     transform = transforms.Compose([transforms.Grayscale(num_output_channels=1),
                                     transforms.ToTensor(),
                                     transforms.Normalize(0.5, 0.5),
@@ -35,8 +35,8 @@ def get_svhn(batch_size, batch_nb=938):
     trainset, valset = random_split(dataset, [train_size, val_size])
 
     trainloader = torch.utils.data.DataLoader(
-        trainset, batch_size=batch_size, shuffle=True)
+        trainset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers = num_workers)
     valloader = torch.utils.data.DataLoader(
-        valset, batch_size=batch_size, shuffle=True)
+        valset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers = num_workers)
 
     return trainloader, valloader

@@ -1,91 +1,130 @@
-from dann.transfer.get_loader import get_mnist, get_svhn
-from dann.basic_dann.models import CNNModel
-import torch.optim as optim
 import torch
+import torchvision
+import torch.nn as nn
+from torch.utils.data import DataLoader
+from torchvision import datasets
+from torchvision import transforms
 import numpy as np
-import matplotlib.pyplot as plt
-from torch.autograd import Variable
+import datetime
+import os, sys
+from matplotlib.pyplot import imshow, imsave
+from dann.transfer.get_loader import get_mnist, get_svhn
+from dann.basic_dann.models import FeatureExtractor, Classifier, Discriminator
+MODEL_NAME = 'DANN'
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-BATCH_SIZE = 64
-lr = 1e-3
-n_epoch = 15
+F = FeatureExtractor().to(DEVICE)
+C = Classifier().to(DEVICE)
+D = Discriminator().to(DEVICE)
 
-source_train, source_val = get_svhn(BATCH_SIZE)
-target_train, target_val = get_mnist(BATCH_SIZE)
+transform = transforms.Compose([
+    transforms.Grayscale(1),
+    transforms.Resize(28),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.5],
+                         std=[0.5])
+])
 
-DANN = CNNModel().cuda()
+batch_size = 64
 
-optimizer = optim.Adam(DANN.parameters(), lr)
+tgt_train_loader, tgt_test_loader = get_mnist(batch_size)
+src_train_loader, src_test_loader = get_svhn(batch_size)
 
-loss_class = torch.nn.CrossEntropyLoss().cuda()
-loss_domain = torch.nn.CrossEntropyLoss().cuda()
+bce = nn.BCELoss()
+xe = nn.CrossEntropyLoss()
 
-acc_source = []
-acc_target = []
+F_opt = torch.optim.Adam(F.parameters())
+C_opt = torch.optim.Adam(C.parameters())
+D_opt = torch.optim.Adam(D.parameters())
 
-for p in DANN.parameters():
-    p.requires_grad = True
+max_epoch = 50
+step = 0
+n_critic = 1 # for training more k steps about Discriminator
+n_batches = 60000//batch_size
+# lamda = 0.01
 
-for epoch in range(n_epoch):
+D_src = torch.ones(batch_size, 1).to(DEVICE) # Discriminator Label to real
+D_tgt = torch.zeros(batch_size, 1).to(DEVICE) # Discriminator Label to fake
+D_labels = torch.cat([D_src, D_tgt], dim=0)
 
-    len_dataloader = len(source_train)
+def get_lambda(epoch, max_epoch):
+    p = epoch / max_epoch
+    return 2. / (1+np.exp(-10.*p)) - 1.
 
-    for i, (source_data, target_data) in enumerate(zip(source_train, target_train)):
+mnist_set = iter(tgt_train_loader)
 
-        p = float(i + epoch * len_dataloader) / (n_epoch * len_dataloader)
-        alpha = 2. / (1. + np.exp(-10 * p)) - 1
 
-        source_inputs, source_labels = source_data
-        source_inputs = source_inputs.cuda()
-        source_labels = source_labels.cuda()
+def sample_mnist(step, n_batches):
+    global mnist_set
+    if step % n_batches == 0:
+        mnist_set = iter(tgt_train_loader)
+    return mnist_set.next()
 
-        target_inputs, target_labels = target_data
-        # Target labels just for evaluating model
-        target_inputs = target_inputs.cuda()
-        target_labels = target_labels.cuda()
+ll_c, ll_d = [], []
+acc_lst = []
 
-        DANN.zero_grad()
-        batch_size = len(source_inputs)
+for epoch in range(1, max_epoch+1):
+    for idx, (src_images, labels) in enumerate(src_train_loader):
+        tgt_images, _ = sample_mnist(step, n_batches)
+        # Training Discriminator
+        src, labels, tgt = src_images.to(DEVICE), labels.to(DEVICE), tgt_images.to(DEVICE)
 
-        # Train model using source data
+        x = torch.cat([src, tgt], dim=0)
+        h = F(x)
+        y = D(h.detach())
 
-        domain_label = torch.zeros(batch_size).long().cuda()
+        Ld = bce(y, D_labels)
+        D.zero_grad()
+        Ld.backward()
+        D_opt.step()
 
-        class_output, domain_output = DANN(source_inputs, alpha)
 
-        err_s_label = loss_class(class_output, source_labels)
-        err_s_domain = loss_domain(domain_output, domain_label)
+        c = C(h[:batch_size])
+        y = D(h)
+        Lc = xe(c, labels)
+        Ld = bce(y, D_labels)
+        lamda = 0.1*get_lambda(epoch, max_epoch)
+        Ltot = Lc -lamda*Ld
 
-        # Train model using target data
 
-        batch_size = len(target_inputs)
+        F.zero_grad()
+        C.zero_grad()
+        D.zero_grad()
 
-        domain_label = torch.ones(batch_size).long().cuda()
+        Ltot.backward()
 
-        _, domain_output = DANN(target_inputs, alpha)
-        err_t_domain = loss_domain(domain_output, domain_label)
+        C_opt.step()
+        F_opt.step()
 
-        err = err_t_domain + err_s_domain + err_s_label
+        if step % 100 == 0:
+            dt = datetime.datetime.now().strftime('%H:%M:%S')
+            print('Epoch: {}/{}, Step: {}, D Loss: {:.4f}, C Loss: {:.4f}, lambda: {:.4f} ---- {}'.format(epoch, max_epoch, step, Ld.item(), Lc.item(), lamda, dt))
+            ll_c.append(Lc)
+            ll_d.append(Ld)
 
-        err.backward()
-        optimizer.step()
+        if step % 500 == 0:
+            F.eval()
+            C.eval()
+            with torch.no_grad():
+                corrects = torch.zeros(1).to(DEVICE)
+                for idx, (src, labels) in enumerate(src_test_loader):
+                    src, labels = src.to(DEVICE), labels.to(DEVICE)
+                    c = C(F(src))
+                    _, preds = torch.max(c, 1)
+                    corrects += (preds == labels).sum()
+                acc = corrects.item() / len(src_test_loader.dataset)
+                print('***** Eval Result: {:.4f}, Step: {}'.format(acc, step))
 
-        if i % 250 == 0:
-            correct_source_percent, correct_target_percent = DANN.evaluate(
-                source_val, target_val)
+                corrects = torch.zeros(1).to(DEVICE)
+                for idx, (tgt, labels) in enumerate(tgt_test_loader):
+                    tgt, labels = tgt.to(DEVICE), labels.to(DEVICE)
+                    c = C(F(tgt))
+                    _, preds = torch.max(c, 1)
+                    corrects += (preds == labels).sum()
+                acc = corrects.item() / len(tgt_test_loader.dataset)
+                print('***** Test Result: {:.4f}, Step: {}'.format(acc, step))
+                acc_lst.append(acc)
 
-            message = "Epochs : {}/{}, ({:.0f}%), Source accuracy:{:.3f}%, Target accuracy:{:.3f}%".format(
-                epoch+1, n_epoch, 100*i/len(source_train), correct_source_percent, correct_target_percent)
-            print(message)
-
-    correct_source_percent, correct_target_percent = DANN.evaluate(source_val, target_val)
-    acc_source.append(correct_source_percent.cpu().numpy())
-    acc_target.append(correct_target_percent.cpu().numpy())
-
-X = range(1, n_epoch+1)
-
-plt.figure()
-plt.plot(X, acc_source, "r")
-plt.plot(X, acc_target, "g")
-plt.show()
-
+            F.train()
+            C.train()
+        step += 1
