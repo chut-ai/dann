@@ -1,11 +1,10 @@
 import torch.nn as nn
-
-class FeatureExtractor(nn.Module):
+class Encoder(nn.Module):
     """
         Feature Extractor
     """
     def __init__(self, in_channel=1, hidden_dims=512):
-        super(FeatureExtractor, self).__init__()
+        super(Encoder, self).__init__()
         self.conv = nn.Sequential(
             nn.Conv2d(in_channel, 64, 3, padding=1),
             nn.BatchNorm2d(64),
