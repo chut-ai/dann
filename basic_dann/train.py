@@ -6,7 +6,8 @@ from torchvision import datasets
 from torchvision import transforms
 import numpy as np
 import datetime
-import os, sys
+import os
+import sys
 from matplotlib.pyplot import imshow, imsave
 from dann.transfer.get_loader import get_mnist, get_svhn
 from dann.basic_dann.models import FeatureExtractor, Classifier, Discriminator
@@ -39,35 +40,30 @@ D_opt = torch.optim.Adam(D.parameters())
 
 max_epoch = 50
 step = 0
-n_critic = 1 # for training more k steps about Discriminator
+n_critic = 1  # for training more k steps about Discriminator
 n_batches = 60000//batch_size
-# lamda = 0.01
 
-D_src = torch.ones(batch_size, 1).to(DEVICE) # Discriminator Label to real
-D_tgt = torch.zeros(batch_size, 1).to(DEVICE) # Discriminator Label to fake
+D_src = torch.ones(batch_size, 1).to(DEVICE)  # Discriminator Label to real
+D_tgt = torch.zeros(batch_size, 1).to(DEVICE)  # Discriminator Label to fake
 D_labels = torch.cat([D_src, D_tgt], dim=0)
+
 
 def get_lambda(epoch, max_epoch):
     p = epoch / max_epoch
     return 2. / (1+np.exp(-10.*p)) - 1.
 
-mnist_set = iter(tgt_train_loader)
 
-
-def sample_mnist(step, n_batches):
-    global mnist_set
-    if step % n_batches == 0:
-        mnist_set = iter(tgt_train_loader)
-    return mnist_set.next()
 
 ll_c, ll_d = [], []
 acc_lst = []
 
 for epoch in range(1, max_epoch+1):
-    for idx, (src_images, labels) in enumerate(src_train_loader):
-        tgt_images, _ = sample_mnist(step, n_batches)
+    for idx, (src_data, tgt_data) in enumerate(zip(src_train_loader, tgt_train_loader)):
+        src_images, src_labels = src_data
+        tgt_images, _ = tgt_data
         # Training Discriminator
-        src, labels, tgt = src_images.to(DEVICE), labels.to(DEVICE), tgt_images.to(DEVICE)
+        src, labels, tgt = src_images.to(DEVICE), src_labels.to(
+            DEVICE), tgt_images.to(DEVICE)
 
         x = torch.cat([src, tgt], dim=0)
         h = F(x)
@@ -78,14 +74,12 @@ for epoch in range(1, max_epoch+1):
         Ld.backward()
         D_opt.step()
 
-
         c = C(h[:batch_size])
         y = D(h)
         Lc = xe(c, labels)
         Ld = bce(y, D_labels)
         lamda = 0.1*get_lambda(epoch, max_epoch)
-        Ltot = Lc -lamda*Ld
-
+        Ltot = Lc - lamda*Ld
 
         F.zero_grad()
         C.zero_grad()
@@ -98,7 +92,8 @@ for epoch in range(1, max_epoch+1):
 
         if step % 100 == 0:
             dt = datetime.datetime.now().strftime('%H:%M:%S')
-            print('Epoch: {}/{}, Step: {}, D Loss: {:.4f}, C Loss: {:.4f}, lambda: {:.4f} ---- {}'.format(epoch, max_epoch, step, Ld.item(), Lc.item(), lamda, dt))
+            print('Epoch: {}/{}, Step: {}, D Loss: {:.4f}, C Loss: {:.4f}, lambda: {:.4f} ---- {}'.format(
+                epoch, max_epoch, step, Ld.item(), Lc.item(), lamda, dt))
             ll_c.append(Lc)
             ll_d.append(Ld)
 
