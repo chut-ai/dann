@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision import transforms
 import numpy as np
+import matplotlib.pyplot as plt
 import datetime
 import os
 import sys
@@ -84,8 +85,8 @@ for epoch in range(1, n_epochs+1):
             dt = datetime.datetime.now().strftime('%H:%M:%S')
             print('Epoch: {}/{}, Step: {}, D Loss: {:.4f}, C Loss: {:.4f}, lambda: {:.4f} ---- {}'.format(
                 epoch, n_epochs, step, Ld.item(), Lc.item(), lamda, dt))
-            ll_c.append(Lc)
-            ll_d.append(Ld)
+            ll_c.append(Lc.detach().cpu())
+            ll_d.append(Ld.detach().cpu())
 
         if step % 500 == 0:
             E.eval()
@@ -98,7 +99,7 @@ for epoch in range(1, n_epochs+1):
                     _, preds = torch.max(c, 1)
                     corrects += (preds == labels).sum()
                 acc = corrects.item() / len(src_test_loader.dataset)
-                print('***** Eval Result: {:.4f}, Step: {}'.format(acc, step))
+                print('***** Source acc: {:.3f}, Step: {}'.format(acc, step))
 
                 corrects = torch.zeros(1).to(DEVICE)
                 for idx, (tgt, labels) in enumerate(tgt_test_loader):
@@ -107,9 +108,32 @@ for epoch in range(1, n_epochs+1):
                     _, preds = torch.max(c, 1)
                     corrects += (preds == labels).sum()
                 acc = corrects.item() / len(tgt_test_loader.dataset)
-                print('***** Test Result: {:.4f}, Step: {}'.format(acc, step))
+                print('***** Target acc: {:.3f}, Step: {}'.format(acc, step))
                 acc_lst.append(acc)
 
             E.train()
             C.train()
         step += 1
+
+# Plots losses and accuracies
+
+X = [100*step for step in range(len(ll_c))]
+
+plt.figure(1)
+plt.plot(X, ll_c)
+plt.xlabel("number of batches")
+plt.ylabel("label classification loss")
+
+plt.figure(2)
+plt.plot(X, ll_d)
+plt.xlabel("number of batches")
+plt.ylabel("domain classification loss")
+
+X2 = [500*step for step in range(len(acc_lst))]
+
+plt.figure(3)
+plt.plot(X2, acc_lst)
+plt.xlabel("number of batches")
+plt.ylabel("target accuracy")
+
+plt.show()
