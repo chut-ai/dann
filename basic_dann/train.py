@@ -10,7 +10,7 @@ import datetime
 import os
 import sys
 from matplotlib.pyplot import imshow, imsave
-from dann.transfer.get_loader import get_mnist, get_svhn
+from dann.get_loader import get_mnist, get_svhn
 from dann.basic_dann.models import Encoder, Classifier, Discriminator
 MODEL_NAME = 'DANN'
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")

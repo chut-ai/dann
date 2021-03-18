@@ -3,7 +3,7 @@ import torchvision
 import torch.nn as nn
 import torch.optim as optim
 from torch.autograd import Variable
-from dann.transfer import model, get_loader
+from dann import model, get_loader
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
